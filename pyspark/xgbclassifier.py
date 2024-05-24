@@ -25,6 +25,7 @@ class HyperOptXGBoostClassifier:
 ,'scale_pos_weight' : hp.loguniform('scale_pos_weight', np.log(self.scale), np.log(self.scale * 10))   # weight to assign positive label to manage imbalance
 }
     self.best_params = None
+    self.model = None
       
     
   def evaluate_model(self, hyperopt_params):
@@ -118,7 +119,14 @@ class HyperOptXGBoostClassifier:
         )
     self.model.fit(self.X_train, self.y_train)
 
-    def predict(self, df):
-      if not hasattr(self, 'model'):
-        raise ValueError("Model not trained yet. Call `train_best_model` first.")
+  def predict(self, df):
+    if self.model is None:
+      raise ValueError("Model not trained yet. Call `train_best_model` first.")
+    else:
+      return self.model.predict(df)
+    
+  def predict_proba(self, df):
+    if self.model is None:
+      raise ValueError("Model not trained yet. Call `train_best_model` first.")
+    else:
       return self.model.predict_proba(df)
