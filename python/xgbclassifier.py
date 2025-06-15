@@ -44,61 +44,15 @@ class XGBoostClassifier:
         self.class_imbalance = False
         self.evaluation_metric = 'roc_auc'  # Default, will be updated based on class balance
     
-    def load_data(self, X=None, y=None):
-        """
-        Load and prepare your dataset.
-        
-        Parameters:
-        -----------
-        X : DataFrame or array-like, optional
-            Feature matrix
-        y : Series or array-like, optional
-            Target vector
-        
-        Returns:
-        --------
-        X : DataFrame
-            Feature matrix
-        y : Series
-            Target vector
-        """
-        if X is not None and y is not None:
-            # Use provided data
-            if not isinstance(X, pd.DataFrame):
-                feature_names = [f'feature_{i}' for i in range(X.shape[1])]
-                X = pd.DataFrame(X, columns=feature_names)
-            
-            if not isinstance(y, pd.Series):
-                y = pd.Series(y, name='target')
-            
-            return X, y
-        
-        # If no data provided, create synthetic data for demonstration
-        from sklearn.datasets import make_classification
-        
-        X_synth, y_synth = make_classification(
-            n_samples=1000, 
-            n_features=20,
-            n_informative=10,
-            n_redundant=5,
-            random_state=self.random_state
-        )
-        
-        feature_names = [f'feature_{i}' for i in range(X_synth.shape[1])]
-        X = pd.DataFrame(X_synth, columns=feature_names)
-        y = pd.Series(y_synth, name='target')
-        
-        return X, y
-    
-    def prepare_data(self, X=None, y=None, test_size=0.2):
+    def prepare_data(self, X, y, test_size=0.2):
         """
         Prepare data for modeling.
         
         Parameters:
         -----------
-        X : DataFrame or array-like, optional
+        X : DataFrame
             Feature matrix
-        y : Series or array-like, optional
+        y : Series or array-like
             Target vector
         test_size : float, default=0.2
             Proportion of the dataset to include in the test split
@@ -114,9 +68,11 @@ class XGBoostClassifier:
         y_test : Series
             Test target vector
         """
-        # Load data if not provided
-        if X is None or y is None:
-            X, y = self.load_data()
+        if not isinstance(X, pd.DataFrame):
+            raise ValueError("X must be a pandas DataFrame")
+        
+        if not isinstance(y, pd.Series):
+            y = pd.Series(y, name='target') if hasattr(y, '__iter__') else pd.Series([y], name='target')
         
         print(f"Dataset shape: {X.shape}")
         class_counts = y.value_counts()
@@ -125,7 +81,7 @@ class XGBoostClassifier:
         
         # Check for class imbalance
         min_class_prop = class_proportions.min()
-        if min_class_prop < 0.3:  # Arbitrary threshold, you can adjust
+        if min_class_prop < 0.4:  # Arbitrary threshold, you can adjust
             self.class_imbalance = True
             self.evaluation_metric = 'average_precision'
             print("Class imbalance detected. Using PR AUC for evaluation.")
@@ -410,10 +366,8 @@ class XGBoostClassifier:
             stratify=y_train
         )
         
-        # XGBoost with Grid Search CV - reduced parameter space
         print("\nTraining XGBoost with GridSearchCV and early stopping...")
         
-        # Reduced parameter space for practical grid search
         param_grid = {
             'n_estimators': [100, 300, 500, 700, 1000],
             'max_depth': [1, 3, 5, 10, 15, 20, 30],
@@ -440,7 +394,6 @@ class XGBoostClassifier:
             random_state=self.random_state
         )
         
-        # We'll use StratifiedKFold for CV to maintain class balance
         stratified_cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=self.random_state)
         
         grid_search = GridSearchCV(
@@ -497,7 +450,7 @@ class XGBoostClassifier:
         
         return best_grid_model
     
-    def tune_xgboost_with_hyperopt(self, k=10, X_train=None, y_train=None, X_test=None, y_test=None, max_evals=50):
+    def tune_xgboost_with_hyperopt(self, k=10, X_train=None, y_train=None, X_test=None, y_test=None, max_evals=4000):
         """
         Tune XGBoost with Hyperopt and train on top k features.
         
@@ -507,7 +460,7 @@ class XGBoostClassifier:
             Number of top features to select
         X_train, y_train, X_test, y_test : optional
             If not provided, will use the values stored during prepare_data()
-        max_evals : int, default=50
+        max_evals : int, default=4000
             Maximum number of parameter combinations to try
         
         Returns:
@@ -544,7 +497,7 @@ class XGBoostClassifier:
             stratify=y_train
         )
         
-        print("\nTraining XGBoost with Hyperopt and early stopping...")
+        print(f"\nTraining XGBoost with Hyperopt (max_evals={max_evals}) and early stopping...")
         
         # Define the search space - exactly matching the parameter ranges
         space = {
@@ -587,7 +540,7 @@ class XGBoostClassifier:
             model.fit(
                 X_train_es, y_train_es,
                 eval_set=[(X_valid_es, y_valid_es)],
-                early_stopping_rounds=20,
+                early_stopping_rounds=10,  # Updated to 10
                 verbose=0
             )
             
@@ -608,13 +561,13 @@ class XGBoostClassifier:
         best = fmin(
             fn=objective,
             space=space,
-            algo=tpe.suggest,
-            max_evals=max_evals,
+            algo=tpe.suggest,  # Using TPE algorithm
+            max_evals=max_evals,  # Updated to 4000
             trials=trials,
-            rstate=np.random.RandomState(self.random_state)
+            rstate=np.random.RandomState(self.random_state),
+            verbose=True  # Show progress
         )
         
-        # Convert best parameters to proper types
         best_params = {
             'max_depth': int(best['max_depth']),
             'learning_rate': best['learning_rate'],
@@ -627,19 +580,24 @@ class XGBoostClassifier:
             'colsample_bynode': best['colsample_bynode'],
             'scale_pos_weight': best['scale_pos_weight'],
             'objective': 'binary:logistic',
+            'tree_method': 'hist',
+            'grow_policy': 'lossguide',
+            'eval_metric': 'logloss',
+            'booster': 'gbtree',
             'use_label_encoder': False,
             'random_state': self.random_state
         }
         
         print("\nBest parameters from Hyperopt:")
         print(best_params)
+        print(f"Best loss: {trials.best_trial['result']['loss']:.6f}")
         
         # Train final model with best parameters
         final_model = xgb.XGBClassifier(**best_params)
         final_model.fit(
             X_train_selected, y_train,
             eval_set=[(X_valid_es, y_valid_es)],
-            early_stopping_rounds=20,
+            early_stopping_rounds=10,  # Updated to 10
             verbose=0
         )
         
@@ -827,16 +785,16 @@ class XGBoostClassifier:
         plt.savefig(f'{safe_name}_performance_curve.png')
         plt.close()
     
-    def fit(self, X=None, y=None, test_size=0.2, n_features=10, tuning_method='both'):
+    def fit(self, X, y, test_size=0.2, n_features=10, tuning_method='both'):
         """
         Complete pipeline: prepare data, train Random Forest, 
         analyze feature importance, and train XGBoost models.
         
         Parameters:
         -----------
-        X : DataFrame or array-like, optional
+        X : DataFrame
             Feature matrix
-        y : Series or array-like, optional
+        y : Series or array-like
             Target vector
         test_size : float, default=0.2
             Proportion of the dataset to include in the test split
@@ -847,7 +805,7 @@ class XGBoostClassifier:
             
         Returns:
         --------
-        self : BinaryClassificationModel
+        self : XGBoostClassifier
             The fitted model instance
         """
         print("BINARY CLASSIFICATION PIPELINE")
