@@ -114,7 +114,7 @@ class XGBoostClassifier:
         
         return X_train, X_test, y_train, y_test
     
-    def train_random_forest(self, X_train=None, y_train=None, X_test=None, y_test=None):
+    def train_random_forest(self, X_train=None, y_train=None, X_test=None, y_test=None, shap_samples=100):
         """
         Train Random Forest Classifier and analyze feature importance.
         
@@ -122,6 +122,9 @@ class XGBoostClassifier:
         -----------
         X_train, y_train, X_test, y_test : optional
             If not provided, will use the values stored during prepare_data()
+        shap_samples : int or 'all', default=100
+            Number of samples to use for SHAP calculation. 
+            If 'all', uses the entire test set. If int, uses that many samples.
         
         Returns:
         --------
@@ -245,10 +248,18 @@ class XGBoostClassifier:
         plt.close()
         
         # 2.3 SHAP values
-        print("\nCalculating SHAP values for Random Forest (this may take a while)...")
+        print("\nCalculating SHAP values for Random Forest...")
         explainer = shap.TreeExplainer(rf_model)
-        # For speed, we use a subset for SHAP calculation
-        shap_sample = X_test.sample(min(100, len(X_test)), random_state=self.random_state)
+        
+        # Determine sample size for SHAP calculation
+        if shap_samples == 'all':
+            shap_sample = X_test
+            print(f"Using all {len(X_test)} samples for SHAP calculation...")
+        else:
+            sample_size = min(shap_samples, len(X_test))
+            shap_sample = X_test.sample(sample_size, random_state=self.random_state)
+            print(f"Using {sample_size} samples for SHAP calculation...")
+        
         shap_values = explainer.shap_values(shap_sample)
         
         # Summary plot
@@ -775,7 +786,7 @@ class XGBoostClassifier:
         plt.savefig(f'{safe_name}_performance_curve.png')
         plt.close()
     
-    def fit(self, X, y, test_size=0.2, n_features=10, tuning_method='both'):
+    def fit(self, X, y, test_size=0.2, n_features=10, tuning_method='both', shap_samples=100):
         """
         Complete pipeline: prepare data, train Random Forest, 
         analyze feature importance, and train XGBoost models.
@@ -792,6 +803,9 @@ class XGBoostClassifier:
             Number of top features to select for XGBoost models
         tuning_method : str, default='both'
             Which tuning method to use ('grid', 'hyperopt', or 'both')
+        shap_samples : int or 'all', default=100
+            Number of samples to use for SHAP calculation. 
+            If 'all', uses the entire test set. If int, uses that many samples.
             
         Returns:
         --------
@@ -805,7 +819,7 @@ class XGBoostClassifier:
         self.prepare_data(X, y, test_size)
         
         # 2. Train Random Forest and analyze feature importance
-        self.train_random_forest()
+        self.train_random_forest(shap_samples=shap_samples)
         
         # Print top features from different methods
         print("\nTop 10 features by different importance methods:")
@@ -891,7 +905,7 @@ class XGBoostClassifier:
             return self.xgb_grid_model.predict_proba(X_selected)
         elif model.lower() == 'rf' and self.rf_model is not None:
             # Predict with random forest model
-            return self.rf_model.predict_proba(X)
+            return self.rf.predict_proba(X)
         else:
             raise ValueError(f"Model '{model}' not available or not fitted yet")
     
