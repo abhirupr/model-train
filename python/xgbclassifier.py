@@ -359,14 +359,6 @@ class XGBoostClassifier:
         X_train_selected = X_train[self.top_features]
         X_test_selected = X_test[self.top_features]
         
-        # Create early stopping datasets
-        X_train_es, X_valid_es, y_train_es, y_valid_es = train_test_split(
-            X_train_selected, y_train, 
-            test_size=0.2, 
-            random_state=self.random_state, 
-            stratify=y_train
-        )
-        
         print("\nTraining XGBoost with GridSearchCV and early stopping...")
         
         param_grid = {
@@ -387,10 +379,9 @@ class XGBoostClassifier:
         xgb_model = xgb.XGBClassifier(
             objective='binary:logistic',
             eval_metric='logloss',
-            tree_method= 'hist',  # Use histogram-based method for faster training
-            grow_policy= 'lossguide',  # For leaf-based tree development
-            eval_metric= 'logloss',
-            booster= 'gbtree',
+            tree_method='hist',
+            grow_policy='lossguide',
+            booster='gbtree',
             use_label_encoder=False,
             random_state=self.random_state
         )
@@ -402,14 +393,14 @@ class XGBoostClassifier:
             param_grid=param_grid,
             cv=stratified_cv,
             scoring=self.evaluation_metric,
-            verbose=1,  # Show progress
+            verbose=1,
             n_jobs=-1
         )
         
-        # Fit with early stopping
+        # Fit with early stopping using the existing test set
         grid_search.fit(
             X_train_selected, y_train,
-            eval_set=[(X_valid_es, y_valid_es)],
+            eval_set=[(X_test_selected, y_test)],
             early_stopping_rounds=20,
             verbose=0
         )
