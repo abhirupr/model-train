@@ -3,7 +3,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, StratifiedKFold
-from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (classification_report, confusion_matrix, accuracy_score, 
                              precision_recall_curve, average_precision_score,
@@ -40,7 +39,6 @@ class XGBoostClassifier:
         self.xgb_hyperopt_model = None
         self.feature_importance = None
         self.top_features = None
-        self.scaler = StandardScaler()
         self.class_imbalance = False
         self.evaluation_metric = 'roc_auc'  # Default, will be updated based on class balance
     
@@ -107,22 +105,14 @@ class XGBoostClassifier:
             X, y, test_size=test_size, random_state=self.random_state, stratify=y
         )
         
-        # Scale features
-        X_train_scaled = self.scaler.fit_transform(X_train)
-        X_test_scaled = self.scaler.transform(X_test)
-        
-        # Convert back to DataFrames to keep feature names
-        X_train_scaled = pd.DataFrame(X_train_scaled, columns=X_train.columns, index=X_train.index)
-        X_test_scaled = pd.DataFrame(X_test_scaled, columns=X_test.columns, index=X_test.index)
-        
-        # Store data for later use
-        self.X_train = X_train_scaled
-        self.X_test = X_test_scaled
+        # Store data for later use (no transformation needed)
+        self.X_train = X_train
+        self.X_test = X_test
         self.y_train = y_train
         self.y_test = y_test
         self.feature_names = X.columns
         
-        return X_train_scaled, X_test_scaled, y_train, y_test
+        return X_train, X_test, y_train, y_test
     
     def train_random_forest(self, X_train=None, y_train=None, X_test=None, y_test=None):
         """
@@ -857,21 +847,17 @@ class XGBoostClassifier:
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X, columns=self.feature_names)
         
-        # Scale the data
-        X_scaled = self.scaler.transform(X)
-        X_scaled = pd.DataFrame(X_scaled, columns=X.columns, index=X.index)
-        
+        # Use data directly - no scaling needed
         if model.lower() == 'hyperopt' and self.xgb_hyperopt_model is not None:
-            # Select features and predict with hyperopt model
-            X_selected = X_scaled[self.top_features]
+            X_selected = X[self.top_features]
             return self.xgb_hyperopt_model.predict(X_selected)
         elif model.lower() == 'grid' and self.xgb_grid_model is not None:
             # Select features and predict with grid search model
-            X_selected = X_scaled[self.top_features]
+            X_selected = X[self.top_features]
             return self.xgb_grid_model.predict(X_selected)
         elif model.lower() == 'rf' and self.rf_model is not None:
             # Predict with random forest model
-            return self.rf_model.predict(X_scaled)
+            return self.rf_model.predict(X)
         else:
             raise ValueError(f"Model '{model}' not available or not fitted yet")
     
@@ -894,21 +880,18 @@ class XGBoostClassifier:
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X, columns=self.feature_names)
         
-        # Scale the data
-        X_scaled = self.scaler.transform(X)
-        X_scaled = pd.DataFrame(X_scaled, columns=X.columns, index=X.index)
-        
+        # Use data directly - no scaling needed
         if model.lower() == 'hyperopt' and self.xgb_hyperopt_model is not None:
             # Select features and predict with hyperopt model
-            X_selected = X_scaled[self.top_features]
+            X_selected = X[self.top_features]
             return self.xgb_hyperopt_model.predict_proba(X_selected)
         elif model.lower() == 'grid' and self.xgb_grid_model is not None:
             # Select features and predict with grid search model
-            X_selected = X_scaled[self.top_features]
+            X_selected = X[self.top_features]
             return self.xgb_grid_model.predict_proba(X_selected)
         elif model.lower() == 'rf' and self.rf_model is not None:
             # Predict with random forest model
-            return self.rf_model.predict_proba(X_scaled)
+            return self.rf_model.predict_proba(X)
         else:
             raise ValueError(f"Model '{model}' not available or not fitted yet")
     
