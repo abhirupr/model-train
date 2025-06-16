@@ -287,8 +287,8 @@ class XGBoostClassifier:
             shap_importance = np.abs(shap_values).mean(axis=0)
             
         feature_importance = pd.DataFrame({
-            'Random Forest': rf_model.feature_importances_,
-            'Permutation': perm_importance.importances_mean,
+            'random_forest': rf_model.feature_importances_,
+            'permutation': perm_importance.importances_mean,
             'SHAP': shap_importance
         }, index=feature_names)
         
