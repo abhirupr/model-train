@@ -371,7 +371,11 @@ class XGBoostClassifier:
             'colsample_bytree': [0.1, 0.32, 0.56, 1.0],
             'colsample_bylevel': [0.1, 0.32, 0.56, 1.0],
             'colsample_bynode': [0.1, 0.32, 0.56, 1.0],
-            'scale_pos_weight': np.logspace(np.log10(self.scale_pos_weight), np.log10(self.scale_pos_weight * 10), 4)
+            'scale_pos_weight': [max(0.1, self.scale_pos_weight - 2), 
+                                max(0.1, self.scale_pos_weight - 1), 
+                                self.scale_pos_weight, 
+                                self.scale_pos_weight + 1, 
+                                self.scale_pos_weight + 2]
         }
         
         print(f"Parameter combinations: {np.prod([len(v) for v in param_grid.values()])}")
