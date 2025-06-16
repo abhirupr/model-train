@@ -485,17 +485,8 @@ class XGBoostClassifier:
         X_train_selected = X_train[self.top_features]
         X_test_selected = X_test[self.top_features]
         
-        # Create early stopping datasets
-        X_train_es, X_valid_es, y_train_es, y_valid_es = train_test_split(
-            X_train_selected, y_train, 
-            test_size=0.2, 
-            random_state=self.random_state, 
-            stratify=y_train
-        )
-        
         print(f"\nTraining XGBoost with Hyperopt (max_evals={max_evals}) and early stopping...")
         
-        # Define the search space - exactly matching the parameter ranges
         space = {
             'n_estimators': hp.quniform('n_estimators', 100, 1000, 100),
             'max_depth': hp.quniform('max_depth', 1, 30, 1),
@@ -523,7 +514,7 @@ class XGBoostClassifier:
                 'colsample_bynode': float(params['colsample_bynode']),
                 'scale_pos_weight': float(params['scale_pos_weight']),
                 'objective': 'binary:logistic',
-                'tree_method': 'hist',  # Use histogram-based method for faster training
+                'tree_method': 'hist',  # histogram-based method for faster training
                 'grow_policy': 'lossguide',  # For leaf-based tree development
                 'eval_metric': 'logloss',
                 'booster': 'gbtree',
@@ -531,25 +522,25 @@ class XGBoostClassifier:
                 'random_state': self.random_state
             }
             
-            # Create and train XGBoost model
+            # Create and train XGBoost model using existing test set for early stopping
             model = xgb.XGBClassifier(**params)
             model.fit(
-                X_train_es, y_train_es,
-                eval_set=[(X_valid_es, y_valid_es)],
-                early_stopping_rounds=10,  # Updated to 10
+                X_train_selected, y_train,
+                eval_set=[(X_test_selected, y_test)],
+                early_stopping_rounds=20,
                 verbose=0
             )
             
-            # Predict on validation set
-            y_pred = model.predict_proba(X_valid_es)[:, 1]
+            # Predict on test set
+            y_pred = model.predict_proba(X_test_selected)[:, 1]
             
             # Calculate loss based on selected metric
             if self.class_imbalance:
                 # For imbalanced classes, use negative PR AUC
-                loss = -average_precision_score(y_valid_es, y_pred)
+                loss = -average_precision_score(y_test, y_pred)
             else:
                 # For balanced classes, use negative ROC AUC
-                loss = -roc_auc_score(y_valid_es, y_pred)
+                loss = -roc_auc_score(y_test, y_pred)
                 
             return {'loss': loss, 'status': STATUS_OK}
         
@@ -558,7 +549,7 @@ class XGBoostClassifier:
             fn=objective,
             space=space,
             algo=tpe.suggest,  # Using TPE algorithm
-            max_evals=max_evals,  # Updated to 4000
+            max_evals=max_evals,
             trials=trials,
             rstate=np.random.RandomState(self.random_state),
             verbose=True  # Show progress
@@ -588,12 +579,12 @@ class XGBoostClassifier:
         print(best_params)
         print(f"Best loss: {trials.best_trial['result']['loss']:.6f}")
         
-        # Train final model with best parameters
+        # Train final model with best parameters on full training set
         final_model = xgb.XGBClassifier(**best_params)
         final_model.fit(
             X_train_selected, y_train,
-            eval_set=[(X_valid_es, y_valid_es)],
-            early_stopping_rounds=10,  # Updated to 10
+            eval_set=[(X_test_selected, y_test)],
+            early_stopping_rounds=20,
             verbose=0
         )
         
