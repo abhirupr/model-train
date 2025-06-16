@@ -322,7 +322,7 @@ class XGBoostClassifier:
         
         return self.top_features
         
-    def tune_xgboost_with_grid_search(self, k=10, X_train=None, y_train=None, X_test=None, y_test=None):
+    def xgboost_tune_grid_search(self, k=10, X_train=None, y_train=None, X_test=None, y_test=None):
         """
         Tune XGBoost with GridSearchCV and train on top k features.
         
@@ -446,7 +446,7 @@ class XGBoostClassifier:
         
         return best_grid_model
     
-    def tune_xgboost_with_hyperopt(self, k=10, X_train=None, y_train=None, X_test=None, y_test=None, max_evals=4000):
+    def xgboost_tune_hyperopt(self, k=10, X_train=None, y_train=None, X_test=None, y_test=None, max_evals=4000):
         """
         Tune XGBoost with Hyperopt and train on top k features.
         
@@ -816,10 +816,10 @@ class XGBoostClassifier:
         
         # 4. Train XGBoost with selected tuning method
         if tuning_method.lower() == 'grid' or tuning_method.lower() == 'both':
-            self.tune_xgboost_with_grid_search(k=n_features)
+            self.xgboost_tune_grid_search(k=n_features)
         
         if tuning_method.lower() == 'hyperopt' or tuning_method.lower() == 'both':
-            self.tune_xgboost_with_hyperopt(k=n_features)
+            self.xgboost_tune_hyperopt(k=n_features)
             
         # 5. Compare models
         if tuning_method.lower() == 'both':
