@@ -6,7 +6,7 @@ from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_sc
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (classification_report, confusion_matrix, accuracy_score, 
                              precision_recall_curve, average_precision_score,
-                             roc_curve, auc, roc_auc_score, precision_recall_fscore_support)
+                             roc_curve, auc, roc_auc_score)
 from sklearn.inspection import permutation_importance
 import shap
 import xgboost as xgb
